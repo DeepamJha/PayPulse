@@ -1,5 +1,6 @@
 import express, { type Request, type Response } from 'express';
 import { randomUUID } from 'crypto';
+import rateLimit from 'express-rate-limit';
 import type { Pool } from 'pg';
 import { pool as defaultPool } from './db';
 import { verifyRazorpaySignature, processRazorpayWebhook } from './webhooks/razorpay';
@@ -7,9 +8,16 @@ import { streamInvoicePdf, type PdfInvoice } from './pdf/generateInvoicePdf';
 
 export function createApp(database: Pool = defaultPool) {
   const app = express();
+  const webhookLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+  });
 
   app.post(
     '/webhooks/razorpay',
+    webhookLimiter,
     express.raw({ type: 'application/json', limit: '1mb' }),
     async (req: Request, res: Response): Promise<void> => {
       const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
